@@ -1,220 +1,321 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gurjot AI</title>
+<title>Gurjot AI</title>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-      display: flex;
-      background: #fff;
-      color: #000;
-    }
+<!-- Markdown + Code -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-    .sidebar {
-      width: 200px;
-      border-right: 1px solid #ccc;
-      padding: 10px;
-    }
+<style>
+body { margin:0; font-family:system-ui; display:flex; height:100vh; }
+.dark { background:#111; color:#fff; }
 
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
+.sidebar { width:260px; background:#f7f7f8; border-right:1px solid #ddd; padding:10px; }
+.dark .sidebar { background:#1a1a1a; }
 
-    header {
-      padding: 10px;
-      text-align: center;
-      border-bottom: 1px solid #ccc;
-      font-weight: bold;
-    }
+.chat-item {
+  padding:8px; margin:5px 0;
+  background:#fff; border-radius:6px;
+  display:flex; justify-content:space-between;
+}
+.dark .chat-item { background:#333; }
 
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 15px;
-    }
+.main { flex:1; display:flex; flex-direction:column; }
 
-    .message {
-      display: flex;
-      margin: 10px 0;
-    }
+header { padding:10px; border-bottom:1px solid #eee; text-align:center; }
 
-    .user { justify-content: flex-end; }
-    .bot { justify-content: flex-start; }
+#chat {
+  flex:1; overflow-y:auto;
+  padding:20px; max-width:800px;
+  margin:auto; width:100%;
+}
 
-    .bubble {
-      padding: 10px;
-      border-radius: 10px;
-      max-width: 60%;
-      border: 1px solid #000;
-      white-space: pre-line;
-    }
+.msg { margin:10px 0; display:flex; position:relative; }
+.user { justify-content:flex-end; }
+.bot { justify-content:flex-start; }
 
-    .user .bubble {
-      background: black;
-      color: white;
-    }
+.bubble {
+  padding:12px;
+  border-radius:10px;
+  max-width:70%;
+}
 
-    footer {
-      display: flex;
-      padding: 10px;
-      border-top: 1px solid #ccc;
-    }
+.user .bubble { background:#000; color:#fff; }
+.dark .user .bubble { background:#fff; color:#000; }
 
-    input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #000;
-    }
+.bot .bubble { background:#eee; }
+.dark .bot .bubble { background:#444; color:#fff; }
 
-    button {
-      margin-left: 5px;
-      padding: 10px;
-      border: 1px solid #000;
-      background: white;
-      cursor: pointer;
-    }
+/* ACTIONS (HOVER ONLY) */
+.actions {
+  position:absolute;
+  top:-18px;
+  right:10px;
+  display:flex;
+  gap:5px;
+  opacity:0;
+  transition:0.2s;
+}
 
-    .copy-btn {
-      font-size: 12px;
-      margin-left: 5px;
-      cursor: pointer;
-    }
+.msg:hover .actions { opacity:1; }
 
-    .typing {
-      font-style: italic;
-      color: gray;
-    }
-  </style>
+.action-btn {
+  font-size:12px;
+  border:none;
+  background:#fff;
+  cursor:pointer;
+  padding:2px 6px;
+  border-radius:4px;
+}
+.dark .action-btn { background:#333; color:#fff; }
+
+footer { display:flex; padding:10px; border-top:1px solid #eee; }
+
+textarea {
+  flex:1;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  resize:none;
+  height:50px;
+}
+
+button {
+  margin-left:5px;
+  padding:10px;
+  background:black;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+</style>
 </head>
 
 <body>
 
 <div class="sidebar">
-  <b>History</b><br><br>
-  <button onclick="newChat()">+ New Chat</button>
-  <button onclick="clearChat()">Clear</button>
+<button onclick="createChat()">+ New</button>
+<button onclick="toggleDark()">🌙</button>
+<div id="chatList"></div>
 </div>
 
 <div class="main">
-
-<header>Gurjot AI</header>
+<header id="title">Gurjot AI</header>
 
 <div id="chat"></div>
 
 <footer>
-  <input type="text" id="userInput" placeholder="Type..." />
-  <button onclick="sendMessage()">Send</button>
-  <button onclick="startVoice()">🎤</button>
+<textarea id="input" placeholder="Message..."></textarea>
+<button onclick="send()">Send</button>
+<button onclick="voice()">🎤</button>
 </footer>
-
 </div>
 
 <script>
-let chat = document.getElementById("chat");
+const API_KEY = "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";
 
-let messages = [
-  { role: "system", content: "You are a smart AI. Reply in Hinglish." }
-];
+let chats = JSON.parse(localStorage.getItem("allChats")||"[]");
+let currentChatId=null;
+const chatDiv=document.getElementById("chat");
 
-// 🔴 API YAHAN DALNI HAI
-const API_KEY = "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";
+// 🔥 SYSTEM PROMPT (ALL LANGUAGE AUTO)
+function systemPrompt(){
+ return `
+You are a professional AI assistant.
+
+Language Rules:
+- Detect user's language automatically
+- Reply in the SAME language
+- Support all languages (Hindi, English, Punjabi, Urdu, etc.)
+- If mixed → reply naturally mixed
+
+Formatting:
+- Use headings, bullet points
+- Keep responses clean and structured
+`;
+}
+
+// CREATE CHAT
+function createChat(){
+ let id=Date.now();
+ chats.push({
+  id,
+  title:"New Chat",
+  messages:[{role:"system",content:systemPrompt()}]
+ });
+ currentChatId=id;
+ save();render();load();
+}
+
+// SAVE
+function save(){localStorage.setItem("allChats",JSON.stringify(chats));}
+
+// LOAD
+function load(){
+ chatDiv.innerHTML="";
+ let c=chats.find(x=>x.id===currentChatId);
+
+ c.messages.forEach((m,i)=>{
+  if(m.role!=="system"){
+    addMessage(m.content, m.role==="user"?"user":"bot", i);
+  }
+ });
+}
+
+// RENDER
+function render(){
+ let list=document.getElementById("chatList");
+ list.innerHTML="";
+ chats.forEach(c=>{
+  list.innerHTML+=`
+  <div class="chat-item">
+    <span onclick="openChat(${c.id})">${c.title}</span>
+    <span onclick="renameChat(${c.id})">✏️</span>
+    <span onclick="deleteChat(${c.id})">🗑</span>
+  </div>`;
+ });
+}
+
+function openChat(id){currentChatId=id;load();}
+function deleteChat(id){chats=chats.filter(c=>c.id!==id);save();render();}
+function renameChat(id){
+ let name=prompt("Rename:");
+ let c=chats.find(x=>x.id===id);
+ if(name)c.title=name;
+ save();render();
+}
+
+// ADD MESSAGE
+function addMessage(text,type,index){
+ let msg=document.createElement("div");
+ msg.className="msg "+type;
+
+ let bubble=document.createElement("div");
+ bubble.className="bubble";
+
+ let html=marked.parse(text);
+
+ let actions=`
+  <div class="actions">
+    <button class="action-btn" onclick="copyMsg(${index})">📋</button>
+    ${type==="user"?`<button class="action-btn" onclick="editMsg(${index})">✏️</button>`:""}
+  </div>`;
+
+ bubble.innerHTML=html + actions;
+
+ msg.appendChild(bubble);
+ chatDiv.appendChild(msg);
+
+ document.querySelectorAll("pre code").forEach(el=>hljs.highlightElement(el));
+}
+
+// COPY
+function copyMsg(i){
+ let c=chats.find(x=>x.id===currentChatId);
+ navigator.clipboard.writeText(c.messages[i].content);
+}
+
+// EDIT
+function editMsg(i){
+ let c=chats.find(x=>x.id===currentChatId);
+ let newText=prompt("Edit:",c.messages[i].content);
+ if(!newText)return;
+
+ c.messages[i].content=newText;
+ c.messages=c.messages.slice(0,i+1);
+
+ save();load();
+}
+
+// TYPING
+async function typeText(el,text){
+ el.innerHTML="";
+ for(let i=0;i<text.length;i++){
+  el.innerHTML+=text[i];
+  await new Promise(r=>setTimeout(r,10));
+ }
+}
 
 // AI
-async function getBotReply(input) {
-  messages.push({ role: "user", content: input });
+async function getReply(input){
+ let c=chats.find(x=>x.id===currentChatId);
+ c.messages.push({role:"user",content:input});
 
-  let res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + API_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-3.5-turbo",
-      messages: messages
-    })
-  });
+ let res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+  method:"POST",
+  headers:{
+   "Authorization":"Bearer "+API_KEY,
+   "Content-Type":"application/json"
+  },
+  body:JSON.stringify({
+   model:"openai/gpt-3.5-turbo",
+   messages:c.messages
+  })
+ });
 
-  let data = await res.json();
-  let reply = data.choices[0].message.content;
+ let data=await res.json();
+ let reply=data.choices?.[0]?.message?.content || "Error";
 
-  messages.push({ role: "assistant", content: reply });
+ c.messages.push({role:"assistant",content:reply});
 
-  return reply;
+ if(c.title==="New Chat") c.title=input.slice(0,20);
+
+ save();render();
+ return reply;
 }
 
-// Send
-async function sendMessage() {
-  let input = document.getElementById("userInput").value;
-  if(!input) return;
+// SEND
+async function send(){
+ let input=document.getElementById("input").value.trim();
+ if(!input)return;
 
-  addMessage(input, "user");
-  document.getElementById("userInput").value = "";
+ addMessage(input,"user");
+ document.getElementById("input").value="";
 
-  let typingId = "typing" + Date.now();
-  chat.innerHTML += `<div id="${typingId}" class="message bot typing">Typing...</div>`;
+ let msg=document.createElement("div");
+ msg.className="msg bot";
+ let bubble=document.createElement("div");
+ bubble.className="bubble";
+ msg.appendChild(bubble);
+ chatDiv.appendChild(msg);
 
-  let reply = await getBotReply(input);
+ let reply=await getReply(input);
+ await typeText(bubble,reply);
 
-  document.getElementById(typingId).remove();
+ bubble.innerHTML=marked.parse(reply);
+ hljs.highlightAll();
 
-  addMessage(reply, "bot");
-
-  chat.scrollTop = chat.scrollHeight;
+ chatDiv.scrollTop=chatDiv.scrollHeight;
 }
 
-// Add message
-function addMessage(text, type) {
-  chat.innerHTML += `
-    <div class="message ${type}">
-      <div class="bubble">
-        ${text}
-        ${type === "bot" ? `<span class="copy-btn" onclick="copyText(this)">📋</span>` : ""}
-      </div>
-    </div>
-  `;
-}
-
-// Copy
-function copyText(el) {
-  navigator.clipboard.writeText(el.parentElement.innerText);
-  alert("Copied!");
-}
-
-// Voice
-function startVoice() {
-  let recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-  recognition.lang = "en-US";
-
-  recognition.onresult = function(e) {
-    document.getElementById("userInput").value = e.results[0][0].transcript;
-  };
-
-  recognition.start();
-}
-
-// Enter
-document.getElementById("userInput").addEventListener("keypress", function(e) {
-  if(e.key === "Enter") sendMessage();
+// ENTER
+document.getElementById("input").addEventListener("keydown",function(e){
+ if(e.key==="Enter" && !e.shiftKey){
+  e.preventDefault();
+  send();
+ }
 });
 
-// Clear
-function clearChat() {
-  chat.innerHTML = "";
+// VOICE
+function voice(){
+ let rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();
+ rec.start();
+ rec.onresult=e=>{
+  document.getElementById("input").value=e.results[0][0].transcript;
+ };
 }
 
-// New Chat
-function newChat() {
-  messages = [
-    { role: "system", content: "You are a smart AI. Reply in Hinglish." }
-  ];
-  clearChat();
+// DARK MODE
+function toggleDark(){
+ document.body.classList.toggle("dark");
 }
+
+// INIT
+if(chats.length===0){createChat();}
+else{currentChatId=chats[0].id;render();load();}
 </script>
 
 </body>
