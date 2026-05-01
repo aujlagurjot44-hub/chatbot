@@ -3,301 +3,253 @@
 <head>
 <title>Gurjot AI</title>
 
-<!-- Markdown + Code -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
 <style>
-body { margin:0; font-family:system-ui; display:flex; height:100vh; }
-.dark { background:#111; color:#fff; }
+body{margin:0;font-family:system-ui;display:flex;height:100vh;overflow:hidden}
+.dark{background:#111;color:#fff}
 
-.sidebar { width:260px; background:#f7f7f8; border-right:1px solid #ddd; padding:10px; }
-.dark .sidebar { background:#1a1a1a; }
+/* SIDEBAR */
+.sidebar{width:260px;background:#f5f5f5;padding:10px;border-right:1px solid #ddd}
+.dark .sidebar{background:#1a1a1a}
 
-.chat-item {
-  padding:8px; margin:5px 0;
-  background:#fff; border-radius:6px;
-  display:flex; justify-content:space-between;
+.chat-item{
+display:flex;justify-content:space-between;
+padding:8px;margin:5px 0;background:#fff;cursor:pointer;border-radius:6px
 }
-.dark .chat-item { background:#333; }
+.dark .chat-item{background:#333}
 
-.main { flex:1; display:flex; flex-direction:column; }
+.main{flex:1;display:flex;flex-direction:column}
 
-header { padding:10px; border-bottom:1px solid #eee; text-align:center; }
+header{text-align:center;padding:10px;font-weight:bold;border-bottom:1px solid #ddd}
 
-#chat {
-  flex:1; overflow-y:auto;
-  padding:20px; max-width:800px;
-  margin:auto; width:100%;
+/* CHAT */
+#chat{flex:1;overflow-y:auto;padding:15px;scroll-behavior:smooth}
+
+.msg{margin:10px 0;display:flex;position:relative}
+.user{justify-content:flex-end}
+.bot{justify-content:flex-start}
+
+.bubble{padding:10px;border-radius:10px;max-width:70%}
+
+.user .bubble{background:#000;color:#fff}
+.dark .user .bubble{background:#fff;color:#000}
+
+.bot .bubble{background:#eee}
+.dark .bot .bubble{background:#444}
+
+/* HOVER ACTIONS */
+.actions{position:absolute;top:-15px;right:10px;opacity:0;display:flex;gap:5px}
+.msg:hover .actions{opacity:1}
+
+.action-btn{
+border:none;padding:3px 6px;background:#fff;cursor:pointer;border-radius:4px
 }
+.dark .action-btn{background:#333;color:#fff}
 
-.msg { margin:10px 0; display:flex; position:relative; }
-.user { justify-content:flex-end; }
-.bot { justify-content:flex-start; }
+/* INPUT */
+footer{display:flex;padding:10px;border-top:1px solid #ddd}
 
-.bubble {
-  padding:12px;
-  border-radius:10px;
-  max-width:70%;
-}
+textarea{flex:1;height:45px;padding:10px;border-radius:6px}
 
-.user .bubble { background:#000; color:#fff; }
-.dark .user .bubble { background:#fff; color:#000; }
+button{margin-left:5px;padding:10px;border:none;background:black;color:white;border-radius:6px}
 
-.bot .bubble { background:#eee; }
-.dark .bot .bubble { background:#444; color:#fff; }
-
-.actions {
-  position:absolute;
-  top:-18px;
-  right:10px;
-  display:flex;
-  gap:5px;
-  opacity:0;
-}
-.msg:hover .actions { opacity:1; }
-
-.action-btn {
-  border:none;
-  background:#fff;
-  cursor:pointer;
-  padding:2px 6px;
-  border-radius:4px;
-}
-.dark .action-btn { background:#333; color:#fff; }
-
-footer { display:flex; padding:10px; border-top:1px solid #eee; }
-
-textarea {
-  flex:1;
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  resize:none;
-  height:50px;
-}
-
-button {
-  margin-left:5px;
-  padding:10px;
-  background:black;
-  color:white;
-  border:none;
-  border-radius:8px;
-  cursor:pointer;
-}
+/* SCROLLBAR RIGHT */
+#chat::-webkit-scrollbar{width:6px}
+#chat::-webkit-scrollbar-thumb{background:#999;border-radius:10px}
+.dark #chat::-webkit-scrollbar-thumb{background:#555}
 </style>
 </head>
 
 <body>
 
 <div class="sidebar">
-<button onclick="createChat()">+ New</button>
+<button onclick="newChat()">+ New Chat</button>
 <button onclick="toggleDark()">🌙</button>
-<div id="chatList"></div>
+<div id="list"></div>
 </div>
 
 <div class="main">
-<header id="title">Gurjot AI</header>
+<header>Gurjot AI</header>
+
 <div id="chat"></div>
 
 <footer>
-<textarea id="input" placeholder="Message..."></textarea>
+<textarea id="input"></textarea>
 <button onclick="send()">Send</button>
 <button onclick="voice()">🎤</button>
 </footer>
 </div>
 
 <script>
-const API_KEY = "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";
 
-let chats = JSON.parse(localStorage.getItem("allChats")||"[]");
-let currentChatId=null;
-const chatDiv=document.getElementById("chat");
+const API_KEY="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";
 
-// SYSTEM PROMPT (ALL LANGUAGES)
-function systemPrompt(){
- return "Detect user's language and reply in same language with structured format.";
+let chats=[];
+let current=0;
+
+/* SYSTEM PROMPT */
+function system(){
+ return "You are Gurjot AI. Reply directly. Match user language. No extra intro.";
 }
 
-// CREATE CHAT
-function createChat(){
+/* NEW CHAT */
+function newChat(){
  let id=Date.now();
  chats.push({
   id,
   title:"New Chat",
-  messages:[{role:"system",content:systemPrompt()}]
+  messages:[{role:"system",content:system()}]
  });
- currentChatId=id;
+ current=id;
  save();render();load();
 }
 
-// SAVE
-function save(){localStorage.setItem("allChats",JSON.stringify(chats));}
+/* SAVE */
+function save(){
+ localStorage.setItem("chats",JSON.stringify(chats));
+}
 
-// LOAD
+/* LOAD */
 function load(){
- chatDiv.innerHTML="";
- let c=chats.find(x=>x.id===currentChatId);
+ let box=document.getElementById("chat");
+ box.innerHTML="";
+ let c=chats.find(x=>x.id===current);
+ if(!c) return;
 
  c.messages.forEach((m,i)=>{
-  if(m.role!=="system"){
-    addMessage(m.content, m.role==="user"?"user":"bot", i);
+  if(m.role!="system"){
+   addMsg(m.content,m.role,i);
   }
  });
 }
 
-// RENDER
+/* RENDER SIDEBAR */
 function render(){
- let list=document.getElementById("chatList");
+ let list=document.getElementById("list");
  list.innerHTML="";
  chats.forEach(c=>{
   list.innerHTML+=`
   <div class="chat-item">
     <span onclick="openChat(${c.id})">${c.title}</span>
-    <span onclick="renameChat(${c.id})">✏️</span>
-    <span onclick="deleteChat(${c.id})">🗑</span>
+    <span onclick="rename(${c.id})">✏️</span>
+    <span onclick="del(${c.id})">🗑</span>
   </div>`;
  });
 }
 
-function openChat(id){currentChatId=id;load();}
-function deleteChat(id){chats=chats.filter(c=>c.id!==id);save();render();}
-function renameChat(id){
+function openChat(id){current=id;load();}
+function del(id){chats=chats.filter(x=>x.id!==id);save();render();}
+function rename(id){
  let name=prompt("Rename:");
  let c=chats.find(x=>x.id===id);
  if(name)c.title=name;
  save();render();
 }
 
-// ADD MESSAGE
-function addMessage(text,type,index){
- let msg=document.createElement("div");
- msg.className="msg "+type;
+/* MESSAGE */
+function addMsg(text,type,i){
+ let d=document.createElement("div");
+ d.className="msg "+type;
 
- let bubble=document.createElement("div");
- bubble.className="bubble";
-
- let html=marked.parse(text);
+ let b=document.createElement("div");
+ b.className="bubble";
+ b.innerHTML=marked.parse(text);
 
  let actions=`
-  <div class="actions">
-    <button class="action-btn" onclick="copyMsg(${index})">📋</button>
-    ${type==="user"?`<button class="action-btn" onclick="editMsg(${index})">✏️</button>`:""}
-  </div>`;
+ <div class="actions">
+  <button class="action-btn" onclick="copy(${i})">📋</button>
+  ${type=="user"?`<button class="action-btn" onclick="edit(${i})">✏️</button>`:""}
+ </div>`;
 
- bubble.innerHTML=html + actions;
+ b.innerHTML+=actions;
 
- msg.appendChild(bubble);
- chatDiv.appendChild(msg);
+ d.appendChild(b);
+ document.getElementById("chat").appendChild(d);
 
- document.querySelectorAll("pre code").forEach(el=>hljs.highlightElement(el));
+ hljs.highlightAll();
 }
 
-// COPY
-function copyMsg(i){
- let c=chats.find(x=>x.id===currentChatId);
+/* COPY */
+function copy(i){
+ let c=chats.find(x=>x.id===current);
  navigator.clipboard.writeText(c.messages[i].content);
 }
 
-// EDIT
-function editMsg(i){
- let c=chats.find(x=>x.id===currentChatId);
- let newText=prompt("Edit:",c.messages[i].content);
- if(!newText)return;
-
- c.messages[i].content=newText;
+/* EDIT */
+function edit(i){
+ let c=chats.find(x=>x.id===current);
+ let t=prompt("Edit:",c.messages[i].content);
+ if(!t)return;
+ c.messages[i].content=t;
  c.messages=c.messages.slice(0,i+1);
-
  save();load();
 }
 
-// TYPING
-async function typeText(el,text){
- el.innerHTML="";
- for(let i=0;i<text.length;i++){
-  el.innerHTML+=text[i];
-  await new Promise(r=>setTimeout(r,8));
- }
-}
-
-// AI CALL (FULL FIX)
+/* AI CALL */
 async function getReply(input){
- let c=chats.find(x=>x.id===currentChatId);
+ let c=chats.find(x=>x.id===current);
  c.messages.push({role:"user",content:input});
 
- try{
-  let res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
-    method:"POST",
-    headers:{
-      "Authorization":"Bearer "+API_KEY,
-      "Content-Type":"application/json",
-      "HTTP-Referer":"https://aujlagurjot44-hub.github.io",
-      "X-Title":"Gurjot AI"
-    },
-    body:JSON.stringify({
-      model:"openai/gpt-3.5-turbo",
-      messages:c.messages
-    })
-  });
+ let res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+  method:"POST",
+  headers:{
+   "Authorization":"Bearer "+API_KEY,
+   "Content-Type":"application/json",
+   "HTTP-Referer":location.origin,
+   "X-Title":"Gurjot AI"
+  },
+  body:JSON.stringify({
+   model:"openai/gpt-4o-mini",
+   messages:c.messages
+  })
+ });
 
-  let data=await res.json();
-  console.log("API:", data);
+ let data=await res.json();
 
-  if(!res.ok){
-    return "❌ " + (data.error?.message || "API Error");
-  }
-
-  let reply=data.choices?.[0]?.message?.content;
-
-  if(!reply) return "❌ No response";
-
-  c.messages.push({role:"assistant",content:reply});
-
-  if(c.title==="New Chat") c.title=input.slice(0,20);
-
-  save();render();
-  return reply;
-
- }catch(e){
-  return "❌ Network Error";
+ if(!res.ok){
+  return "❌ "+(data.error?.message || "Error");
  }
+
+ let reply=data.choices[0].message.content;
+
+ c.messages.push({role:"assistant",content:reply});
+ save();render();
+
+ return reply;
 }
 
-// SEND
+/* SEND */
 async function send(){
- let input=document.getElementById("input").value.trim();
- if(!input)return;
+ let inp=document.getElementById("input").value;
+ if(!inp)return;
 
- addMessage(input,"user");
+ addMsg(inp,"user");
+
+ let bot=document.createElement("div");
+ bot.className="msg bot";
+ let b=document.createElement("div");
+ b.className="bubble";
+ bot.appendChild(b);
+ document.getElementById("chat").appendChild(bot);
+
+ let reply=await getReply(inp);
+ b.innerHTML=marked.parse(reply);
+
  document.getElementById("input").value="";
-
- let msg=document.createElement("div");
- msg.className="msg bot";
- let bubble=document.createElement("div");
- bubble.className="bubble";
- msg.appendChild(bubble);
- chatDiv.appendChild(msg);
-
- let reply=await getReply(input);
- await typeText(bubble,reply);
-
- bubble.innerHTML=marked.parse(reply);
- hljs.highlightAll();
-
- chatDiv.scrollTop=chatDiv.scrollHeight;
 }
 
-// ENTER
-document.getElementById("input").addEventListener("keydown",function(e){
- if(e.key==="Enter" && !e.shiftKey){
+/* ENTER KEY */
+document.getElementById("input").addEventListener("keydown",e=>{
+ if(e.key==="Enter"&&!e.shiftKey){
   e.preventDefault();
   send();
  }
 });
 
-// VOICE
+/* VOICE */
 function voice(){
  let rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();
  rec.start();
@@ -306,14 +258,14 @@ function voice(){
  };
 }
 
-// DARK
+/* DARK */
 function toggleDark(){
  document.body.classList.toggle("dark");
 }
 
-// INIT
-if(chats.length===0){createChat();}
-else{currentChatId=chats[0].id;render();load();}
+/* INIT */
+newChat();
+
 </script>
 
 </body>
